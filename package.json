@@ -1,0 +1,14 @@
+{
+  "name": "sfdx-bulk-helper",
+  "version": "0.0.1",
+  "description": "Simple wrapper around some SalesforceDX functions to ease bulk API operations",
+  "main": "sfdx.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Mikkel Flindt Heisterberg, lekkim@heisterberg.dk",
+  "license": "MIT",
+  "dependencies": {
+    "tmp": "0.0.33"
+  }
+}
