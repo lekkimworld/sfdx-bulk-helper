@@ -9,7 +9,10 @@ function SalesforceDX(username, verbose = false) {
     this._username = username
 
     this._logIfVerbose = (msg) => {
-        if (this._verbose) console.log(msg)
+        if (this._verbose) this._log(msg)
+    }
+    this._log = (msg) => {
+        console.log(`SFDX - ${msg}`)
     }
 }
 
@@ -44,16 +47,16 @@ SalesforceDX.prototype.bulkRequest = function(cmd, objname) {
             let state = data.result[0].state
             let id = data.result[0].id
             let jobId = data.result[0].jobId
-            console.log(`SFDX - Issued bulk request to object (${objname}) - id ${id}, jobId ${jobId} - state: ${state}`)
+            this._log(`issued bulk request to object (${objname}) - id ${id}, jobId ${jobId} - state: ${state}`)
             this._logIfVerbose(JSON.stringify(data))
 
             // wait for bulk operation to finish
             let doWait = () => {
                 global.setTimeout(() => {
-                    console.log(`SFDX - asking for bulk status for id ${id}, jobId ${jobId}`)
+                    this._log(`asking for bulk status for id ${id}, jobId ${jobId}`)
                     this.executeSFDXCommand(`sfdx force:data:bulk:status -u ${this._username} --batchid ${id} --jobid ${jobId}`).then(data => {
                         let state = data.result[0].state
-                        console.log(`SFDX - received bulk status for id ${id}, jobId ${jobId} - state: ${state}`)
+                        this._log(`received bulk status for id ${id}, jobId ${jobId} - state: ${state}`)
                         this._logIfVerbose(JSON.stringify(data))
 
                         if (state === 'Completed') {
@@ -64,7 +67,7 @@ SalesforceDX.prototype.bulkRequest = function(cmd, objname) {
                             return reject()
                         } else {
                             // keep waiting
-                            console.log('Waiting...')
+                            this._log('waiting...')
                         }
                         doWait()
                     })
@@ -86,9 +89,10 @@ SalesforceDX.prototype.bulkRequest = function(cmd, objname) {
  */
 SalesforceDX.prototype.bulkQueryAndDelete = function(objname, where) {
     return new Promise((resolve, reject) => {
+        this._log(`issueing SOQL using WHERE clause of '${where}' on ${objname} object`)
         this.executeSFDXCommand(`sfdx force:data:soql:query -u ${this._username} -q "SELECT Id FROM ${objname} WHERE ${where}`).then(data => {
             let count = data.result.records.length
-            console.log(`Received ${count} records`)
+            this._log(`received ${count} records`)
             if (!count) {
                 return reject()
             }
@@ -101,7 +105,7 @@ SalesforceDX.prototype.bulkQueryAndDelete = function(objname, where) {
                     deleteIds.write(`${id}\n`)
                 })
                 deleteIds.close()
-                this._logIfVerbose(`Wrote CSV file ${tmppath} with ${objname} Ids to delete`)
+                this._logIfVerbose(`wrote CSV file ${tmppath} with ${objname} Ids to delete`)
 
                 // do command
                 this.bulkDelete(objname, tmppath).then(() => {
@@ -123,11 +127,11 @@ SalesforceDX.prototype.bulkQueryAndDelete = function(objname, where) {
  * @param {String} cmd 
  */
 SalesforceDX.prototype.executeSFDXCommand = function(cmd) {
-    this._logIfVerbose(`SFDX - received command: ${cmd}`)
+    this._logIfVerbose(`received command: ${cmd}`)
     let command = cmd
     if (cmd.indexOf(' --json') < 0) {
         command += ' --json'
-        this._logIfVerbose(`SFDX - command (modified): ${command}`)
+        this._logIfVerbose(`command (modified): ${command}`)
     }
     return new Promise((resolve, reject) => {
         // as output may exceed the node.js stdin buffer size we create a tmp file we 
@@ -136,7 +140,7 @@ SalesforceDX.prototype.executeSFDXCommand = function(cmd) {
             command += ` > ${tmppath}`
             exec(command, (err, stdout, stderr) => {
                 if (err) {
-                    this._logIfVerbose('SFDX - command resulted in error in shell')
+                    this._logIfVerbose('command resulted in error in shell')
                     return reject(err)
                 }
                 
@@ -144,7 +148,7 @@ SalesforceDX.prototype.executeSFDXCommand = function(cmd) {
                 let input = fs.readFileSync(tmppath).toString()
 
                 // parse
-                this._logIfVerbose('SFDX - command succeeded in shell')
+                this._logIfVerbose('command succeeded in shell')
                 let output = JSON.parse(input)
 
                 // we're done with tmp file
