@@ -79,6 +79,16 @@ SalesforceDX.prototype.bulkRequest = function(cmd, objname) {
 }
 
 /**
+ * This is simply syntaxtic sugar on top of #executeSFDXCommand as it bascially just executes 
+ * the query using force:data:soql:query.
+ * 
+ * @param {String} soql valid SOQL query or else...
+ */
+SalesforceDX.prototype.soqlQuery = function(soql) {
+    return this.executeSFDXCommand(`sfdx force:data:soql:query -u ${this._username} -q ${soql}`)
+}
+
+/**
  * Does a query for Ids from the supplied object using the supplied 
  * SOQL WHERE query, pipes the result to a tmp-file to avoid stdin buffer 
  * overruns, creates a CSV file with the IDs a does a SalesforceDX bulk delete 
@@ -90,7 +100,7 @@ SalesforceDX.prototype.bulkRequest = function(cmd, objname) {
 SalesforceDX.prototype.bulkQueryAndDelete = function(objname, where) {
     return new Promise((resolve, reject) => {
         this._log(`issueing SOQL using WHERE clause of '${where}' on ${objname} object`)
-        this.executeSFDXCommand(`sfdx force:data:soql:query -u ${this._username} -q "SELECT Id FROM ${objname} WHERE ${where}`).then(data => {
+        this.soqlQuery(`SELECT Id FROM ${objname} WHERE ${where}`).then(data => {
             let count = data.result.records.length
             this._log(`received ${count} records`)
             if (!count) {
