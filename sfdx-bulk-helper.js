@@ -85,7 +85,9 @@ SalesforceDX.prototype.bulkRequest = function(cmd, objname) {
  * @param {String} soql valid SOQL query or else...
  */
 SalesforceDX.prototype.soqlQuery = function(soql) {
-    return this.executeSFDXCommand(`sfdx force:data:soql:query -u ${this._username} -q ${soql}`)
+    // sanatize soql
+    let sanatizedSoql = soql.replace(/"/g, "'")
+    return this.executeSFDXCommand(`sfdx force:data:soql:query -u ${this._username} -q "${sanatizedSoql}"`)
 }
 
 /**
