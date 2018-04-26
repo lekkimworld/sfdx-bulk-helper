@@ -44,32 +44,36 @@ SalesforceDX.prototype.bulkDelete = function(objname, filename) {
 SalesforceDX.prototype.bulkRequest = function(cmd, objname) {
     return new Promise((resolve, reject) => {
         this.executeSFDXCommand(cmd).then(data => {
-            let state = data.result[0].state
-            let id = data.result[0].id
-            let jobId = data.result[0].jobId
-            this._log(`issued bulk request to object (${objname}) - id ${id}, jobId ${jobId} - state: ${state}`)
+            // check status
+            if (data.status !== 0) return reject(new Error(`Received non-zero status code back, message: ${data.message}`))
+
+            // get jobid and log
+            const jobId = data.result[0].jobId
+            this._log(`issued bulk request to object (${objname}) - jobId ${jobId}, batch count: ${data.result.length}`)
             this._logIfVerbose(JSON.stringify(data))
 
-            // wait for bulk operation to finish
+            // wait for all bulk operations to finish
             let doWait = () => {
                 global.setTimeout(() => {
-                    this._log(`asking for bulk status for id ${id}, jobId ${jobId}`)
-                    this.executeSFDXCommand(`sfdx force:data:bulk:status -u ${this._username} --batchid ${id} --jobid ${jobId}`).then(data => {
-                        let state = data.result[0].state
-                        this._log(`received bulk status for id ${id}, jobId ${jobId} - state: ${state}`)
-                        this._logIfVerbose(JSON.stringify(data))
-
-                        if (state === 'Completed') {
-                            // completed
-                            return resolve()
-                        } else if (state === 'Failed') {
-                            // failed
-                            return reject()
-                        } else {
-                            // keep waiting
-                            this._log('waiting...')
+                    this._log(`asking for overall status for bulk jobId ${jobId}`)
+                    this.executeSFDXCommand(`sfdx force:data:bulk:status -u ${this._username} --jobid ${jobId}`).then(data => {
+                        // verify status
+                        if (data.status !== 0) {
+                            return reject(new Error(`hmmmmm - non-zero status when asking for status of bulk jobId ${jobId} - message: ${data.message}`))
                         }
-                        doWait()
+
+                        // get data (convert to numbers)
+                        let totalBatches = (data.result.numberBatchesTotal-0)
+                        let totalDone = (data.result.numberBatchesCompleted-0) + (data.result.numberBatchesFailed-0)
+                        this._logIfVerbose(`current bulk status, numberBatchesTotal: ${totalBatches}, numberBatchesCompleted: ${data.result.numberBatchesCompleted}, numberBatchesFailed: ${data.result.numberBatchesFailed}, numberBatchesQueued: ${data.result.numberBatchesQueued}, numberBatchesInProgress: ${data.result.numberBatchesInProgress}`)
+                        if (totalDone !== totalBatches) {
+                            this._log(`received bulk status and you're not going to like it - not done yet... ${totalDone} batches of ${totalBatches} are done (completed or failed) - continuing to wait...`)
+                            return doWait()
+                        }
+
+                        // hurray we are done
+                        this._log(`hurrah - it's what we've been waiting for - we're done!! (${data.result.totalProcessingTime} ms)`)
+                        return resolve()
                     })
                 }, 10000)
             }
