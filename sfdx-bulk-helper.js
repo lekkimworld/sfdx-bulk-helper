@@ -154,23 +154,23 @@ SalesforceDX.prototype.executeSFDXCommand = function(cmd) {
         // pipe the ouput to and read that back in
         tmp.file((err, tmppath, fd, callback) => {
             command += ` > ${tmppath}`
+            
             exec(command, (err, stdout, stderr) => {
                 if (err) {
                     this._logIfVerbose('command resulted in error in shell')
                     return reject(err)
                 }
-                
+                this._logIfVerbose('command succeeded in shell')
+
                 // read file
                 let input = fs.readFileSync(tmppath).toString()
-
-                // parse
-                this._logIfVerbose('command succeeded in shell')
                 let output = JSON.parse(input)
-
+                
                 // we're done with tmp file
                 callback()
-
-                // resolve
+                
+                // resolve, reject
+                if (output.hasOwnProperty('status') && output.status > 0) return reject(output)
                 resolve(output)
             })
         })
@@ -186,10 +186,10 @@ SalesforceDX.prototype.executeSFDXCommand = function(cmd) {
 SalesforceDX.prototype.ensureOrgConnected = function() {
     return new Promise((resolve, reject) => {
         this.executeSFDXCommand(`sfdx force:org:display -u ${this._username}`).then(data => {
-            if (data.result.connectedStatus !== 'Connected') {
-                return reject(data.result.connectedStatus)
+            if (data.result.hasOwnProperty('connectedStatus') && data.result.connectedStatus !== 'Connected') {
+                reject(data.result.connectedStatus)
             } else {
-                return resolve()
+                resolve()
             }
         }).catch(err => {
             reject(err)
