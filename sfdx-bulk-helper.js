@@ -166,9 +166,6 @@ SalesforceDX.prototype.executeSFDXCommand = function(cmd) {
                 let input = fs.readFileSync(tmppath).toString()
                 let output = JSON.parse(input)
                 
-                // we're done with tmp file
-                callback()
-                
                 // resolve, reject
                 if (output.hasOwnProperty('status') && output.status > 0) return reject(output)
                 resolve(output)
