@@ -152,7 +152,8 @@ SalesforceDX.prototype.executeSFDXCommand = function(cmd) {
     return new Promise((resolve, reject) => {
         // as output may exceed the node.js stdin buffer size we create a tmp file we 
         // pipe the ouput to and read that back in
-        tmp.file((err, tmppath, fd, callback) => {
+        let options = {discardDescriptor: process.platform === "win32" ? true : false}
+        tmp.file(options, (err, tmppath, fd, callback) => {
             command += ` > ${tmppath}`
             
             exec(command, (err, stdout, stderr) => {
