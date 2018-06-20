@@ -13,7 +13,7 @@ sfdx.bulkUpsert('Account', 'my_account_data.csv', 'Id').then(() => {
 ```
 
 ## Bulk DELETE
-Bulk API DELETE is done by initializing the SalesforceDX object using the username from SalesforceDX to use, and then calling `bulkDelete`supplying the object to DELETE and a filename with IDs to delete. Be sure to specify a header in the CSV file.
+Bulk API DELETE is done by initializing the SalesforceDX object using the username from SalesforceDX to use, and then calling `bulkDelete` supplying the object to DELETE and a filename with IDs to delete. Be sure to specify a header in the CSV file.
 ```
 let sfdx = new SalesforceDX('foo@example.com')
 sfdx.bulkDelete('Account', 'my_account_data.csv').then(() => {

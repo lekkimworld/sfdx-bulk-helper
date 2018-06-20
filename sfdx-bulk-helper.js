@@ -24,7 +24,7 @@ function SalesforceDX(username, verbose = false) {
  * @param {String} externalId 
  */
 SalesforceDX.prototype.bulkUpsert = function(objname, filename, externalId) {
-    return this.bulkRequest(`sfdx force:data:bulk:upsert -u ${this._username} -s ${objname} -f ${filename} -i ${externalId}`, objname)
+    return this.bulkRequest(`force:data:bulk:upsert -s ${objname} -f ${filename} -i ${externalId}`, objname)
 }
 
 /**
@@ -33,7 +33,7 @@ SalesforceDX.prototype.bulkUpsert = function(objname, filename, externalId) {
  * @param {*} filename 
  */
 SalesforceDX.prototype.bulkDelete = function(objname, filename) {
-    return this.bulkRequest(`sfdx force:data:bulk:delete -u ${this._username} -s ${objname} -f ${filename}`, objname)
+    return this.bulkRequest(`force:data:bulk:delete -s ${objname} -f ${filename}`, objname)
 }
 
 /**
@@ -56,7 +56,7 @@ SalesforceDX.prototype.bulkRequest = function(cmd, objname) {
             let doWait = () => {
                 global.setTimeout(() => {
                     this._log(`asking for overall status for bulk jobId ${jobId}`)
-                    this.executeSFDXCommand(`sfdx force:data:bulk:status -u ${this._username} --jobid ${jobId}`).then(data => {
+                    this.executeSFDXCommand(`force:data:bulk:status --jobid ${jobId}`).then(data => {
                         // verify status
                         if (data.status !== 0) {
                             return reject(new Error(`hmmmmm - non-zero status when asking for status of bulk jobId ${jobId} - message: ${data.message}`))
@@ -87,11 +87,27 @@ SalesforceDX.prototype.bulkRequest = function(cmd, objname) {
  * the query using force:data:soql:query.
  * 
  * @param {String} soql valid SOQL query or else...
+ * @param {Boolean} tooling should we use the tooling API
  */
-SalesforceDX.prototype.soqlQuery = function(soql) {
+SalesforceDX.prototype.soqlQuery = function(soql, tooling) {
     // sanatize soql
     let sanatizedSoql = soql.replace(/"/g, "'")
-    return this.executeSFDXCommand(`sfdx force:data:soql:query -u ${this._username} -q "${sanatizedSoql}"`)
+    return this.executeSFDXCommand(`force:data:soql:query -q "${sanatizedSoql}"${tooling ? ' -t' : ''}`)
+}
+
+/**
+ * Same as #soqlQuery but explicitly for data.
+ * @param {String} soql 
+ */
+SalesforceDX.prototype.dataSoqlQuery = function(soql) {
+    return this.soqlQuery(soql, false)
+}
+/**
+ * Same as #soqlQuery but explicitly for the Tooling API.
+ * @param {String} soql 
+ */
+SalesforceDX.prototype.toolingSoqlQuery = function(soql) {
+    return this.soqlQuery(soql, true)
 }
 
 /**
@@ -138,22 +154,28 @@ SalesforceDX.prototype.bulkQueryAndDelete = function(objname, where) {
 }
 
 /**
- * Utility function to issue a call using SalesforceDX in the shell and returnsthe 
- * data as a JSON object. Method will append --json to the command if not specified.
+ * Utility function to issue a call using SalesforceDX in the shell and returns the 
+ * data as a JSON object. Method will append --json to the command if not specified 
+ * and the --targetusername.
  * @param {String} cmd 
  */
 SalesforceDX.prototype.executeSFDXCommand = function(cmd) {
     this._logIfVerbose(`received command: ${cmd}`)
     let command = cmd
+    if (cmd.indexOf('sfdx ') !== 0) {
+        command = `sfdx ${command}`
+    }
     if (cmd.indexOf(' --json') < 0) {
         command += ' --json'
         this._logIfVerbose(`command (modified): ${command}`)
     }
+    if (cmd.indexOf('-u ') < 0 && cmd.indexOf('--targetusername ') < 0) {
+        command += ` --targetusername ${this._username}`
+    }
     return new Promise((resolve, reject) => {
         // as output may exceed the node.js stdin buffer size we create a tmp file we 
         // pipe the ouput to and read that back in
-        let options = {discardDescriptor: process.platform === "win32" ? true : false}
-        tmp.file(options, (err, tmppath, fd, callback) => {
+        tmp.file({ discardDescriptor: true }, (err, tmppath, fd, callback) => {
             command += ` > ${tmppath}`
             
             exec(command, (err, stdout, stderr) => {
@@ -183,7 +205,7 @@ SalesforceDX.prototype.executeSFDXCommand = function(cmd) {
  */
 SalesforceDX.prototype.ensureOrgConnected = function() {
     return new Promise((resolve, reject) => {
-        this.executeSFDXCommand(`sfdx force:org:display -u ${this._username}`).then(data => {
+        this.executeSFDXCommand('force:org:display').then(data => {
             if (data.result.hasOwnProperty('connectedStatus') && data.result.connectedStatus !== 'Connected') {
                 reject(data.result.connectedStatus)
             } else {
