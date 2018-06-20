@@ -1,6 +1,6 @@
 {
   "name": "sfdx-bulk-helper",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "description": "Simple wrapper around some SalesforceDX functions to ease bulk API operations",
   "main": "sfdx-bulk-helper.js",
   "scripts": {
