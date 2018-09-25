@@ -1,12 +1,14 @@
 const exec = require('child_process').exec
+const spawn = require('child_process').spawn
 const path = require('path')
 const fs = require('fs')
 const tmp = require('tmp')
 
-function SalesforceDX(username, verbose = false) {
+function SalesforceDX(username, verbose = false, sfdxcmd = 'sfdx') {
     if (!username) throw new Error('Missing username')
     this._verbose = verbose
     this._username = username
+    this._sfdxcmd = sfdxcmd
 
     this._logIfVerbose = (msg) => {
         if (this._verbose) this._log(msg)
@@ -159,43 +161,62 @@ SalesforceDX.prototype.bulkQueryAndDelete = function(objname, where) {
  * and the --targetusername.
  * @param {String} cmd 
  */
-SalesforceDX.prototype.executeSFDXCommand = function(cmd) {
+SalesforceDX.prototype.executeSFDXCommand = function(cmd, opts) {
     this._logIfVerbose(`received command: ${cmd}`)
     let command = cmd
+    let options = opts && typeof opts === 'object' ? opts : {}
+
     if (cmd.indexOf('sfdx ') !== 0) {
-        command = `sfdx ${command}`
+        command = `${this._sfdxcmd} ${command}`
     }
-    if (cmd.indexOf(' --json') < 0) {
+    if (cmd.indexOf(' --json') < 0 && (!options.hasOwnProperty('nojson') || !options.nojson)) {
         command += ' --json'
         this._logIfVerbose(`command (modified): ${command}`)
     }
-    if (cmd.indexOf('-u ') < 0 && cmd.indexOf('--targetusername ') < 0) {
+    if (cmd.indexOf('force:org:create') < 0 && cmd.indexOf('-u ') < 0 && cmd.indexOf('--targetusername ') < 0) {
         command += ` --targetusername ${this._username}`
     }
     return new Promise((resolve, reject) => {
-        // as output may exceed the node.js stdin buffer size we create a tmp file we 
-        // pipe the ouput to and read that back in
-        tmp.file({ discardDescriptor: true }, (err, tmppath, fd, callback) => {
-            command += ` > ${tmppath}`
-            
-            exec(command, (err, stdout, stderr) => {
-                if (err) {
-                    this._logIfVerbose('command resulted in error in shell')
-                    return reject(err)
-                }
-                this._logIfVerbose('command succeeded in shell')
-
-                // read file
-                let input = fs.readFileSync(tmppath).toString()
-                let output = JSON.parse(input)
+        const doPipeToFile = !options.hasOwnProperty('nopipe')
+        if (doPipeToFile) {
+            // as output may exceed the node.js stdin buffer size we create a tmp file we 
+            // pipe the ouput to and read that back in
+            tmp.file({ discardDescriptor: true }, (err, tmppath, fd, callback) => {
+                command += ` > ${tmppath}`
                 
-                // resolve, reject
-                if (output.hasOwnProperty('status') && output.status > 0) return reject(output)
-                resolve(output)
+                exec(command, (err, stdout, stderr) => {
+                    if (err) {
+                        this._logIfVerbose('command resulted in error in shell')
+                        return reject(err)
+                    }
+                    this._logIfVerbose('command succeeded in shell')
+
+                    // read file
+                    let input = fs.readFileSync(tmppath).toString()
+                    let output = JSON.parse(input)
+                    
+                    // resolve, reject
+                    if (output && output.hasOwnProperty('status') && output.status > 0) return reject(output)
+                    resolve(output)
+                })
             })
-        })
-    
-        
+        } else {
+            let parts = command.split(' ')
+            let operation = spawn(parts[0], parts.slice(1), {'shell': true})
+            operation.stdout.on('data', data => {
+                console.log(data.toString())
+            })
+            operation.stderr.on('data', data => {
+                console.log(data.toString())
+            })
+            operation.on('error', err => {
+                reject(err)
+            })
+            operation.on('exit', code => {
+                this._log('Spawned child process exited with code ' + code.toString());
+                resolve()
+            })
+        }
     })
 }
 
