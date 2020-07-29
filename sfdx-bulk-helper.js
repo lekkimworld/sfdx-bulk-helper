@@ -213,8 +213,12 @@ SalesforceDX.prototype.executeSFDXCommand = function(cmd, opts) {
                 reject(err)
             })
             operation.on('exit', code => {
-                this._log('Spawned child process exited with code ' + code.toString());
-                resolve()
+                this._log('Spawned child process exited with code ' + code.toString())
+                if (code !== 0) {
+                    reject(new Error(`sfdx-bulk-helper.js - Spawned child process exited with code ${code}`))
+                } else{
+                    resolve();
+                }                
             })
         }
     })
